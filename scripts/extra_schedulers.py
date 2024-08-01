@@ -106,10 +106,10 @@ class ExtraScheduler(scripts.Script):
         return [custom_sigmas]
 
     def process(self, params, *script_args, **kwargs):
-        custom_sigmas = script_args[0]
-
-        ExtraScheduler.customSigmas = custom_sigmas
-        params.extra_generation_params.update(dict(es_custom = ExtraScheduler.customSigmas, ))
+        if params.scheduler == 'custom':
+            custom_sigmas = script_args[0]
+            ExtraScheduler.customSigmas = custom_sigmas
+            params.extra_generation_params.update(dict(es_custom = ExtraScheduler.customSigmas, ))
         return
 
 try:
