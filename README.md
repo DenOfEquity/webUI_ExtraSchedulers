@@ -17,15 +17,19 @@ Adds four new schedulers to the dropdown list:
   * *s*: this step
   * *x*: step / (total steps - 1)
   * *phi*: (1 + sqrt(5)) / 2
+
+Adds two new samplers:
+* Euler a CFG++
+* Euler CFG++
   
 ### Why do? ###
 Different results, sometimes better. I tend to use cosine-exponential blend most of the time.
 
 ### How do? ###
-It's just a calculation of different number sequences travelling from sigma_max to sigma_min over the set number of sampling steps, guiding the denoising process. Infinite possibilities, but few sweet spots.
+*(schedulers)* It's just a calculation of different number sequences travelling from sigma_max to sigma_min over the set number of sampling steps, guiding the denoising process. Infinite possibilities, but few sweet spots.
 
 ### Redo? ###
-Yes, settings are saved to image infotext and *params.txt*.
+Yes, custom scheduler is saved to image infotext and *params.txt*.
 
 ### How install? ###
 Go to the **Extensions** tab, then **Install from URL**, use the URL for this repository.
