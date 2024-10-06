@@ -2,6 +2,19 @@ import gradio
 import math, numpy
 import torch
 from modules import scripts
+from tqdm.auto import trange
+
+#   copied from kdiffusion/sampling.py
+def default_noise_sampler(x):
+    return lambda sigma, sigma_next: torch.randn_like(x)
+def get_ancestral_step(sigma_from, sigma_to, eta=1.):
+    """Calculates the noise level (sigma_down) to step down to and the amount
+    of noise to add (sigma_up) when doing an ancestral sampling step."""
+    if not eta:
+        return sigma_to, 0.
+    sigma_up = min(sigma_to, eta * (sigma_to ** 2 * (sigma_from ** 2 - sigma_to ** 2) / sigma_from ** 2) ** 0.5)
+    sigma_down = (sigma_to ** 2 - sigma_up ** 2) ** 0.5
+    return sigma_down, sigma_up
 
 def cosine_scheduler (n, sigma_min, sigma_max, device):
     sigmas = torch.zeros(n, device=device)
@@ -80,6 +93,55 @@ def custom_scheduler(n, sigma_min, sigma_max, device):
             s += 1
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
+
+
+@torch.no_grad()
+def sample_euler_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1.):
+    """Implements Algorithm 2 (Euler steps) from Karras et al. (2022)."""
+    extra_args = {} if extra_args is None else extra_args
+    model.need_last_noise_uncond = True
+    s_in = x.new_ones([x.shape[0]])
+
+    for i in trange(len(sigmas) - 1, disable=disable):
+        gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
+        eps = torch.randn_like(x) * s_noise
+        sigma_hat = sigmas[i] * (gamma + 1)
+        if gamma > 0:
+            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
+        denoised = model(x, sigma_hat * s_in, **extra_args)
+        d = model.last_noise_uncond
+
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigma_hat, 'denoised': denoised})
+
+        # Euler method
+        x = denoised + d * sigmas[i+1]
+    return x
+
+@torch.no_grad()
+def sample_euler_ancestral_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable=None, eta=1., s_noise=1., noise_sampler=None):
+    """Ancestral sampling with Euler method steps."""
+    extra_args = {} if extra_args is None else extra_args
+    noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
+    model.need_last_noise_uncond = True
+    s_in = x.new_ones([x.shape[0]])
+
+    for i in trange(len(sigmas) - 1, disable=disable):
+        denoised = model(x, sigmas[i] * s_in, **extra_args)
+        d = model.last_noise_uncond
+
+        sigma_down, sigma_up = get_ancestral_step(sigmas[i], sigmas[i + 1], eta=eta)
+
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
+
+        # Euler method
+        x = denoised + d * sigma_down
+        if sigmas[i + 1] > 0:
+            x = x + noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * sigma_up
+    return x
+
+
 class ExtraScheduler(scripts.Script):
     sorting_priority = 99
 
@@ -115,10 +177,6 @@ class ExtraScheduler(scripts.Script):
 try:
     import modules.sd_schedulers as schedulers
 
-    if "name=\'custom\'" in str(schedulers.schedulers[-1]):
-        print ("Extension: Extra Schedulers: removing schedulers")
-        del schedulers.schedulers[-4:]
-
     if "name=\'custom\'" not in str(schedulers.schedulers[-1]):
         print ("Extension: Extra Schedulers: adding new schedulers")
         CosineScheduler = schedulers.Scheduler("cosine", "Cosine", cosine_scheduler)
@@ -130,7 +188,25 @@ try:
         schedulers.schedulers.append(PhiScheduler)
         schedulers.schedulers.append(CustomScheduler)
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
+        
+        from modules import sd_samplers_common, sd_samplers
+        from modules.sd_samplers_kdiffusion import sampler_extra_params, KDiffusionSampler
+        samplers_cfgpp = [
+            ("Euler a CFG++", sample_euler_ancestral_cfgpp, ["k_euler_a_cfgpp"], {"uses_ensd": True}),
+            ("Euler CFG++", sample_euler_cfgpp, ["k_euler_cfgpp"], {}),
+        ]
+        samplers_data_cfgpp = [
+            sd_samplers_common.SamplerData(label, lambda model, funcname=funcname: KDiffusionSampler(funcname, model), aliases, options)
+            for label, funcname, aliases, options in samplers_cfgpp
+            if callable(funcname)
+        ]
+        sampler_extra_params['sample_euler_cfgpp'] = ['s_churn', 's_tmin', 's_tmax', 's_noise']
+
+        sd_samplers.all_samplers.extend(samplers_data_cfgpp)
+        sd_samplers.all_samplers_map = {x.name: x for x in sd_samplers.all_samplers}
+        sd_samplers.set_samplers()
+        
     ExtraScheduler.installed = True
 except:
     print ("Extension: Extra Schedulers: unsupported webUI")
-
+    ExtraScheduler.installed = False
