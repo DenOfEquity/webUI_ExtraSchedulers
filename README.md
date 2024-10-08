@@ -18,9 +18,11 @@ Adds four new schedulers to the dropdown list:
   * *x*: step / (total steps - 1)
   * *phi*: (1 + sqrt(5)) / 2
 
-Adds two new samplers:
+Adds four new samplers:
 * Euler a CFG++
 * Euler CFG++
+* Euler Dy CFG++ (based on Euler Dy by Koishi-Star)
+* Euler SMEA Dy CFG++ (...)
   
 ### Why do? ###
 Different results, sometimes better. I tend to use cosine-exponential blend most of the time.
