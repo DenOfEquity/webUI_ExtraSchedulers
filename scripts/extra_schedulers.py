@@ -141,7 +141,7 @@ class _Rescaler:
         self.model.init_latent, self.model.mask, self.model.nmask = self.init_latent, self.mask, self.nmask
 
 @torch.no_grad()
-def dy_sampling_step_cfgpp(x, model, sigma_next, sigma_hat, **extra_args):
+def dy_sampling_step_cfgpp(x, model, sigma_hat, **extra_args):
     original_shape = x.shape
     batch_size, channels, m, n = original_shape[0], original_shape[1], original_shape[2] // 2, original_shape[3] // 2
     extra_row = x.shape[2] % 2 == 1
@@ -180,7 +180,7 @@ def dy_sampling_step_cfgpp(x, model, sigma_next, sigma_hat, **extra_args):
     return x
 
 @torch.no_grad()
-def smea_sampling_step_cfgpp(x, model, sigma_next, sigma_hat, **extra_args):
+def smea_sampling_step_cfgpp(x, model, sigma_hat, **extra_args):
     m, n = x.shape[2], x.shape[3]
     x = torch.nn.functional.interpolate(input=x, scale_factor=(1.25, 1.25), mode='nearest-exact')
     with _Rescaler(model, x, 'nearest-exact', **extra_args) as rescaler:
@@ -215,7 +215,7 @@ def sample_euler_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None, disa
         
         if sigmas[i + 1] > 0:
             if i // 2 == 1:
-                x = dy_sampling_step_cfgpp(x, model, sigmas[i + 1], sigma_hat, **extra_args)        
+                x = dy_sampling_step_cfgpp(x, model, sigma_hat, **extra_args)        
         
     return x
 
@@ -243,9 +243,9 @@ def sample_euler_smea_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None,
         
         if sigmas[i + 1] > 0:
             if i + 1 // 2 == 1:     #   ??  this is i == 1; why not if i // 2 == 1 same as Euler Dy
-                x = dy_sampling_step_cfgpp(x, model, sigmas[i + 1], sigma_hat, **extra_args)
+                x = dy_sampling_step_cfgpp(x, model, sigma_hat, **extra_args)
             if i + 1 // 2 == 0:     #   ??  this is i == 0
-                x = smea_sampling_step_cfgpp(x, model, sigmas[i + 1], sigma_hat, **extra_args)        
+                x = smea_sampling_step_cfgpp(x, model, sigma_hat, **extra_args)        
     return x
 
 @torch.no_grad()
