@@ -53,6 +53,90 @@ def phi_scheduler(n, sigma_min, sigma_max, device):
             sigmas[x] = sigma_min + (sigma_max-sigma_min)*((1-x/(n-1))**(phi*phi))
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
+def get_sigmas_vp(n, sigma_min, sigma_max, device='cpu'):
+    """Constructs a continuous VP noise schedule."""
+    
+    beta_d = 19.9
+    beta_min = 0.1
+    eps_s = 1e-3
+    
+    t = torch.linspace(1, eps_s, n, device=device)
+    sigmas = torch.sqrt(torch.exp(beta_d * t ** 2 / 2 + beta_min * t) - 1)
+    return torch.cat([sigmas, sigmas.new_zeros([1])])
+
+def get_sigmas_laplace(n, sigma_min, sigma_max, device='cpu'):
+    """Constructs the noise schedule proposed by Tiankai et al. (2024). """
+    mu = 0.
+    beta = 0.5
+    epsilon = 1e-5 # avoid log(0)
+    x = torch.linspace(0, 1, n, device=device)
+    clamp = lambda x: torch.clamp(x, min=sigma_min, max=sigma_max)
+    lmb = mu - beta * torch.sign(0.5-x) * torch.log(1 - 2 * torch.abs(0.5-x) + epsilon)
+    sigmas = clamp(torch.exp(lmb))
+    return torch.cat([sigmas, sigmas.new_zeros([1])])
+
+
+
+def get_sigmas_sinusoidal_sf(n, sigma_min, sigma_max, device='cpu'):
+    """Constructs a sinusoidal noise schedule."""
+    sf = 3.5
+    x = torch.linspace(0, 1, n, device=device)
+    sigmas = (sigma_min + (sigma_max - sigma_min) * (1 - torch.sin(torch.pi / 2 * x)))/sigma_max
+    sigmas = sigmas**sf
+    sigmas = sigmas * sigma_max
+    return torch.cat([sigmas, sigmas.new_zeros([1])])
+ 
+def get_sigmas_invcosinusoidal_sf(n, sigma_min, sigma_max, device='cpu'):
+    """Constructs a sinusoidal noise schedule."""
+    sf = 3.5
+    x = torch.linspace(0, 1, n, device=device)
+    sigmas = (sigma_min + (sigma_max - sigma_min) * (0.5*(torch.cos(x * math.pi) + 1)))/sigma_max
+    sigmas = sigmas**sf
+    sigmas = sigmas * sigma_max
+    return torch.cat([sigmas, sigmas.new_zeros([1])])
+ 
+def get_sigmas_react_cosinusoidal_dynsf(n, sigma_min, sigma_max, device='cpu'):
+    """Constructs a sinusoidal noise schedule."""
+    sf = 2.15
+    x = torch.linspace(0, 1, n, device=device)
+    sigmas = (sigma_min+(sigma_max-sigma_min)*(torch.cos(x*(torch.pi/2))))/sigma_max
+    sigmas = sigmas**(sf*(n*x/n))
+    sigmas = sigmas * sigma_max
+    return torch.cat([sigmas, sigmas.new_zeros([1])])
+ 
+def get_sigmas_karras_dynamic(n, sigma_min, sigma_max, device='cpu'):
+    """Constructs the noise schedule of Karras et al. (2022)."""
+    rho = 7.
+    ramp = torch.linspace(0, 1, n, device=device)
+    min_inv_rho = sigma_min ** (1 / rho)
+    max_inv_rho = sigma_max ** (1 / rho)
+    sigmas = torch.zeros_like(ramp)
+    for i in range(n):
+        sigmas[i] = (max_inv_rho + ramp[i] * (min_inv_rho - max_inv_rho)) ** (math.cos(i*math.tau/n)*2+rho) 
+    return torch.cat([sigmas, sigmas.new_zeros([1])])
+ 
+def get_sigmas_karras_exponential_decay(n, sigma_min, sigma_max, device='cpu'):
+    """Constructs the noise schedule of Karras et al. (2022)."""
+    rho = 7.
+    ramp = torch.linspace(0, 1, n, device=device)
+    min_inv_rho = sigma_min ** (1 / rho)
+    max_inv_rho = sigma_max ** (1 / rho)
+    sigmas = torch.zeros_like(ramp)
+    for i in range(n):
+        sigmas[i] = (max_inv_rho + ramp[i] * (min_inv_rho - max_inv_rho)) ** (rho-(3*i/n))
+    return torch.cat([sigmas, sigmas.new_zeros([1])])
+ 
+def get_sigmas_karras_exponential_increment(n, sigma_min, sigma_max, device='cpu'):
+    """Constructs the noise schedule of Karras et al. (2022)."""
+    rho = 7.
+    ramp = torch.linspace(0, 1, n, device=device)
+    min_inv_rho = sigma_min ** (1 / rho)
+    max_inv_rho = sigma_max ** (1 / rho)
+    sigmas = torch.zeros_like(ramp)
+    for i in range(n):
+        sigmas[i] = (max_inv_rho + ramp[i] * (min_inv_rho - max_inv_rho)) ** (rho+3*i/n)
+    return torch.cat([sigmas, sigmas.new_zeros([1])])
+
 def custom_scheduler(n, sigma_min, sigma_max, device):
     if 'import' in ExtraScheduler.customSigmas:
         sigmas = torch.linspace(sigma_max, sigma_min, n, device=device)
@@ -329,6 +413,7 @@ def sample_euler_ancestral_cfgpp(model, x, sigmas, extra_args=None, callback=Non
             x = x + noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * sigma_up
     return x
 
+
 class ExtraScheduler(scripts.Script):
     sorting_priority = 99
 
@@ -352,6 +437,7 @@ class ExtraScheduler(scripts.Script):
         self.infotext_fields = [
             (custom_sigmas, "es_custom"),
         ]
+
         return [custom_sigmas]
 
     def process(self, params, *script_args, **kwargs):
@@ -369,10 +455,32 @@ try:
         CosineScheduler = schedulers.Scheduler("cosine", "Cosine", cosine_scheduler)
         CosExpScheduler = schedulers.Scheduler("cosexp", "CosineExponential blend", cosexpblend_scheduler)
         PhiScheduler = schedulers.Scheduler("phi", "Phi", phi_scheduler)
+        VPScheduler = schedulers.Scheduler("vp", "VP", get_sigmas_vp)
+        LaplaceScheduler = schedulers.Scheduler("laplace", "Laplace", get_sigmas_laplace)
+
+        SineScheduler = schedulers.Scheduler("laplace", "Sine scaled", get_sigmas_sinusoidal_sf)
+        InvCosScheduler = schedulers.Scheduler("laplace", "Inverse Cosine scaled", get_sigmas_invcosinusoidal_sf)
+        CosDynScheduler = schedulers.Scheduler("laplace", "Cosine Dynamic", get_sigmas_react_cosinusoidal_dynsf)
+        KarrasDynScheduler = schedulers.Scheduler("laplace", "Karras Dynamic", get_sigmas_karras_dynamic)
+        KarrasExpDecayScheduler = schedulers.Scheduler("laplace", "Karras Exp Decay", get_sigmas_karras_exponential_decay)
+        KarrasExpIncScheduler = schedulers.Scheduler("laplace", "Karras Exp Inc", get_sigmas_karras_exponential_increment)
+
         CustomScheduler = schedulers.Scheduler("custom", "custom", custom_scheduler)
+
+
         schedulers.schedulers.append(CosineScheduler)
         schedulers.schedulers.append(CosExpScheduler)
         schedulers.schedulers.append(PhiScheduler)
+        schedulers.schedulers.append(VPScheduler)
+        schedulers.schedulers.append(LaplaceScheduler)
+
+        schedulers.schedulers.append(SineScheduler)
+        schedulers.schedulers.append(InvCosScheduler)
+        schedulers.schedulers.append(CosDynScheduler)
+        schedulers.schedulers.append(KarrasDynScheduler)
+        schedulers.schedulers.append(KarrasExpDecayScheduler)
+        schedulers.schedulers.append(KarrasExpIncScheduler)
+
         schedulers.schedulers.append(CustomScheduler)
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
         
