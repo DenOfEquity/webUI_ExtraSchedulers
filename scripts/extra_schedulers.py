@@ -64,6 +64,7 @@ def get_sigmas_vp(n, sigma_min, sigma_max, device='cpu'):
     sigmas = torch.sqrt(torch.exp(beta_d * t ** 2 / 2 + beta_min * t) - 1)
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
+#via comfy
 def get_sigmas_laplace(n, sigma_min, sigma_max, device='cpu'):
     """Constructs the noise schedule proposed by Tiankai et al. (2024). """
     mu = 0.
@@ -76,7 +77,7 @@ def get_sigmas_laplace(n, sigma_min, sigma_max, device='cpu'):
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
 
-
+#via @yoinked-h
 def get_sigmas_sinusoidal_sf(n, sigma_min, sigma_max, device='cpu'):
     """Constructs a sinusoidal noise schedule."""
     sf = 3.5
@@ -85,7 +86,8 @@ def get_sigmas_sinusoidal_sf(n, sigma_min, sigma_max, device='cpu'):
     sigmas = sigmas**sf
     sigmas = sigmas * sigma_max
     return torch.cat([sigmas, sigmas.new_zeros([1])])
- 
+
+#via @yoinked-h
 def get_sigmas_invcosinusoidal_sf(n, sigma_min, sigma_max, device='cpu'):
     """Constructs a sinusoidal noise schedule."""
     sf = 3.5
@@ -94,7 +96,8 @@ def get_sigmas_invcosinusoidal_sf(n, sigma_min, sigma_max, device='cpu'):
     sigmas = sigmas**sf
     sigmas = sigmas * sigma_max
     return torch.cat([sigmas, sigmas.new_zeros([1])])
- 
+
+#via @yoinked-h
 def get_sigmas_react_cosinusoidal_dynsf(n, sigma_min, sigma_max, device='cpu'):
     """Constructs a sinusoidal noise schedule."""
     sf = 2.15
@@ -103,7 +106,8 @@ def get_sigmas_react_cosinusoidal_dynsf(n, sigma_min, sigma_max, device='cpu'):
     sigmas = sigmas**(sf*(n*x/n))
     sigmas = sigmas * sigma_max
     return torch.cat([sigmas, sigmas.new_zeros([1])])
- 
+
+#via @yoinked-h
 def get_sigmas_karras_dynamic(n, sigma_min, sigma_max, device='cpu'):
     """Constructs the noise schedule of Karras et al. (2022)."""
     rho = 7.
@@ -114,7 +118,8 @@ def get_sigmas_karras_dynamic(n, sigma_min, sigma_max, device='cpu'):
     for i in range(n):
         sigmas[i] = (max_inv_rho + ramp[i] * (min_inv_rho - max_inv_rho)) ** (math.cos(i*math.tau/n)*2+rho) 
     return torch.cat([sigmas, sigmas.new_zeros([1])])
- 
+
+#via @yoinked-h
 def get_sigmas_karras_exponential_decay(n, sigma_min, sigma_max, device='cpu'):
     """Constructs the noise schedule of Karras et al. (2022)."""
     rho = 7.
@@ -125,7 +130,8 @@ def get_sigmas_karras_exponential_decay(n, sigma_min, sigma_max, device='cpu'):
     for i in range(n):
         sigmas[i] = (max_inv_rho + ramp[i] * (min_inv_rho - max_inv_rho)) ** (rho-(3*i/n))
     return torch.cat([sigmas, sigmas.new_zeros([1])])
- 
+
+#via @yoinked-h
 def get_sigmas_karras_exponential_increment(n, sigma_min, sigma_max, device='cpu'):
     """Constructs the noise schedule of Karras et al. (2022)."""
     rho = 7.
