@@ -167,6 +167,7 @@ def custom_scheduler(n, sigma_min, sigma_max, device):
 
 
 from scripts.res_solver import sample_res_solver
+from scripts.clybius_dpmpp_4m_sde import sample_clyb_4m_sde_momentumized
 from modules import sd_samplers_common, sd_samplers
 from modules.sd_samplers_kdiffusion import sampler_extra_params, KDiffusionSampler
 
@@ -208,20 +209,20 @@ try:
 
     if "name='custom'" not in str(schedulers.schedulers[-1]):
         print ("Extension: Extra Schedulers: adding new schedulers")
-        CosineScheduler = schedulers.Scheduler("cosine", "Cosine", cosine_scheduler)
-        CosExpScheduler = schedulers.Scheduler("cosexp", "CosineExponential blend", cosexpblend_scheduler)
-        PhiScheduler = schedulers.Scheduler("phi", "Phi", phi_scheduler)
-        VPScheduler = schedulers.Scheduler("vp", "VP", get_sigmas_vp)
-        LaplaceScheduler = schedulers.Scheduler("laplace", "Laplace", get_sigmas_laplace)
+        CosineScheduler         = schedulers.Scheduler("cosine",        "Cosine",                   cosine_scheduler)
+        CosExpScheduler         = schedulers.Scheduler("cosexp",        "CosineExponential blend",  cosexpblend_scheduler)
+        PhiScheduler            = schedulers.Scheduler("phi",           "Phi",                      phi_scheduler)
+        VPScheduler             = schedulers.Scheduler("vp",            "VP",                       get_sigmas_vp)
+        LaplaceScheduler        = schedulers.Scheduler("laplace",       "Laplace",                  get_sigmas_laplace)
 
-        SineScheduler = schedulers.Scheduler("laplace", "Sine scaled", get_sigmas_sinusoidal_sf)
-        InvCosScheduler = schedulers.Scheduler("laplace", "Inverse Cosine scaled", get_sigmas_invcosinusoidal_sf)
-        CosDynScheduler = schedulers.Scheduler("laplace", "Cosine Dynamic", get_sigmas_react_cosinusoidal_dynsf)
-        KarrasDynScheduler = schedulers.Scheduler("laplace", "Karras Dynamic", get_sigmas_karras_dynamic)
-        KarrasExpDecayScheduler = schedulers.Scheduler("laplace", "Karras Exp Decay", get_sigmas_karras_exponential_decay)
-        KarrasExpIncScheduler = schedulers.Scheduler("laplace", "Karras Exp Inc", get_sigmas_karras_exponential_increment)
+        SineScheduler           = schedulers.Scheduler("sine_sc",       "Sine scaled",              get_sigmas_sinusoidal_sf)
+        InvCosScheduler         = schedulers.Scheduler("inv_cos_sc",    "Inverse Cosine scaled",    get_sigmas_invcosinusoidal_sf)
+        CosDynScheduler         = schedulers.Scheduler("cosine_dyn",    "Cosine Dynamic",           get_sigmas_react_cosinusoidal_dynsf)
+        KarrasDynScheduler      = schedulers.Scheduler("karras_dyn",    "Karras Dynamic",           get_sigmas_karras_dynamic)
+        KarrasExpDecayScheduler = schedulers.Scheduler("karras_exp_d",  "Karras Exp Decay",         get_sigmas_karras_exponential_decay)
+        KarrasExpIncScheduler   = schedulers.Scheduler("karras_exp_i",  "Karras Exp Inc",           get_sigmas_karras_exponential_increment)
 
-        CustomScheduler = schedulers.Scheduler("custom", "custom", custom_scheduler)
+        CustomScheduler         = schedulers.Scheduler("custom",        "custom",                   custom_scheduler)
 
 
         schedulers.schedulers.append(CosineScheduler)
@@ -241,16 +242,16 @@ try:
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
 
         try:
-            # CFG++ method is Forge only, not worjing in A1111
+            # CFG++ method is Forge only, not working in A1111
             import modules_forge.forge_version
             from scripts.samplers_cfgpp import sample_euler_ancestral_cfgpp, sample_euler_cfgpp, sample_euler_dy_cfgpp, sample_euler_smea_dy_cfgpp, sample_euler_negative_cfgpp, sample_euler_negative_dy_cfgpp
             samplers_cfgpp = [
-                ("Euler a CFG++",       sample_euler_ancestral_cfgpp,       ["k_euler_a_cfgpp"],       {"uses_ensd": True}),
-                ("Euler CFG++",         sample_euler_cfgpp,                 ["k_euler_cfgpp"],         {}),
-                ("Euler Dy CFG++",      sample_euler_dy_cfgpp,              ["k_euler_dy_cfgpp"],      {}),
-                ("Euler SMEA Dy CFG++", sample_euler_smea_dy_cfgpp,         ["k_euler_smea_dy_cfgpp"], {}),
-                ("Euler Negative CFG++", sample_euler_negative_cfgpp,       ["k_euler_negative_cfgpp"], {}),
-                ("Euler Negative Dy CFG++", sample_euler_negative_dy_cfgpp, ["k_euler_negative_dy_cfgpp"], {}),
+                ("Euler a CFG++",           sample_euler_ancestral_cfgpp,   ["k_euler_a_cfgpp"],            {"uses_ensd": True} ),
+                ("Euler CFG++",             sample_euler_cfgpp,             ["k_euler_cfgpp"],              {}                  ),
+                ("Euler Dy CFG++",          sample_euler_dy_cfgpp,          ["k_euler_dy_cfgpp"],           {}                  ),
+                ("Euler SMEA Dy CFG++",     sample_euler_smea_dy_cfgpp,     ["k_euler_smea_dy_cfgpp"],      {}                  ),
+                ("Euler Negative CFG++",    sample_euler_negative_cfgpp,    ["k_euler_negative_cfgpp"],     {}                  ),
+                ("Euler Negative Dy CFG++", sample_euler_negative_dy_cfgpp, ["k_euler_negative_dy_cfgpp"],  {}                  ),
             ]
             samplers_data_cfgpp = [
                 sd_samplers_common.SamplerData(label, lambda model, funcname=funcname: KDiffusionSampler(funcname, model), aliases, options)
@@ -268,7 +269,8 @@ try:
             pass
 
         samplers_extra = [
-            ("Refined Exponential Solver",           sample_res_solver,                     ["k_res"],              {}),
+            ("Refined Exponential Solver",   sample_res_solver,                 ["k_res"],              {}),
+            ("DPM++ 4M SDE",                 sample_clyb_4m_sde_momentumized,   ["k_dpmpp_4m_sde"],     {}),
         ]
         samplers_data_extra = [
             sd_samplers_common.SamplerData(label, lambda model, funcname=funcname: KDiffusionSampler(funcname, model), aliases, options)
