@@ -259,7 +259,9 @@ def sample_refined_exp_s(
   #assert sigmas[-1] == 0
   noise_sampler = default_noise_sampler(x)
 
-  ita = ita.to(x.device)
+  device = x.device
+  ita = ita.to(device)
+  sigmas = sigmas.to(device)
 
   sigma_min, sigma_max = sigmas[sigmas > 0].min(), sigmas.max()
 
@@ -270,9 +272,9 @@ def sample_refined_exp_s(
       time = sigmas[i] / sigma_max
       if 'sigma' not in locals():
         sigma = sigmas[i]
-      eps = noise_sampler(sigma, sigma_next).float()
+      eps = noise_sampler(sigma, sigma_next).float().to(device)
       sigma_hat = sigma * (1 + ita)
-      x_hat = x + (sigma_hat ** 2 - sigma ** 2) ** .5 * eps
+      x_hat = x + (sigma_hat ** 2 - sigma ** 2).sqrt() * eps
       x_next, denoised, denoised2, vel, vel_2 = _refined_exp_sosu_step(
         model,
         x_hat,
@@ -299,9 +301,9 @@ def sample_refined_exp_s(
         callback(payload)
       x = x_next
     if denoise_to_zero:
-      eps = noise_sampler(sigma, sigma_next).float()
+      eps = noise_sampler(sigma, sigma_next).float().to(device)
       sigma_hat = sigma * (1 + ita)
-      x_hat = x + (sigma_hat ** 2 - sigma ** 2) ** .5 * eps
+      x_hat = x + (sigma_hat ** 2 - sigma ** 2).sqrt() * eps
       x_next: FloatTensor = model(x_hat, sigma.to(x_hat.device), **extra_args)
       pbar.update()
 
@@ -323,5 +325,4 @@ def sample_refined_exp_s(
 # Many thanks to Kat + Birch-San for this wonderful sampler implementation! https://github.com/Birch-san/sdxl-play/commits/res/
 def sample_res_solver(model, x, sigmas, extra_args=None, callback=None, disable=None, noise_sampler_type="gaussian", noise_sampler=None, denoise_to_zero=True, simple_phi_calc=False, c2=0.5, ita=torch.Tensor((0.25,)), momentum=0.0):
     return sample_refined_exp_s(model, x, sigmas, extra_args=extra_args, callback=callback, disable=disable, noise_sampler=noise_sampler, denoise_to_zero=denoise_to_zero, simple_phi_calc=simple_phi_calc, c2=c2, ita=ita, momentum=momentum)
-
 
