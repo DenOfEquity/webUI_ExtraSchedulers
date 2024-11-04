@@ -3,7 +3,7 @@
 #### (webUI must have split sampler/scheduler selection) ####
 
 >[!IMPORTANT]
->not for old Forge. For that, see my [OverrideScheduler extension](https://github.com/DenOfEquity/SchedRide).
+>not for old Forge. For some related stuff in old Forge, see my old [OverrideScheduler extension](https://github.com/DenOfEquity/SchedRide).
 
 ### What do? ###
 Adds six new schedulers to the dropdown list:
@@ -21,10 +21,10 @@ Adds six new schedulers to the dropdown list:
   * *phi*: (1 + sqrt(5)) / 2
 
 Adds six new samplers:
-* Euler a CFG++
-* Euler CFG++
-* Euler Dy CFG++ (based on Euler Dy by Koishi-Star)
-* Euler SMEA Dy CFG++ (...)
+* Euler a CFG++ [Forge only]
+* Euler CFG++ [Forge only]
+* Euler Dy CFG++ (based on Euler Dy by Koishi-Star) [Forge only]
+* Euler SMEA Dy CFG++ (...) [Forge only]
 * Refined Exponential Solver (credit: Katherine Crowson, Birch-san, Clybius)
 * DPM++ 4M SDE (credit: Clybius)
   
