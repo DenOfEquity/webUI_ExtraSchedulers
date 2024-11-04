@@ -1,5 +1,5 @@
 ## Extra Schedulers extension for Stable Diffusion webUI ##
-### Automatic1111, new Forge (gradio 4 based), and probably reForge ###
+### built for new Forge, partial support for Automatic1111, and probably reForge ###
 #### (webUI must have split sampler/scheduler selection) ####
 
 >[!IMPORTANT]
