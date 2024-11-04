@@ -162,16 +162,8 @@ try:
         schedulers.schedulers.append(CosineScheduler)
         schedulers.schedulers.append(CosExpScheduler)
         schedulers.schedulers.append(PhiScheduler)
-        schedulers.schedulers.append(VPScheduler)
         schedulers.schedulers.append(LaplaceScheduler)
-
-        schedulers.schedulers.append(SineScheduler)
-        schedulers.schedulers.append(InvCosScheduler)
-        schedulers.schedulers.append(CosDynScheduler)
         schedulers.schedulers.append(KarrasDynScheduler)
-        schedulers.schedulers.append(KarrasExpDecayScheduler)
-        schedulers.schedulers.append(KarrasExpIncScheduler)
-
         schedulers.schedulers.append(CustomScheduler)
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
 
@@ -184,8 +176,6 @@ try:
                 ("Euler CFG++",             sample_euler_cfgpp,             ["k_euler_cfgpp"],              {}                  ),
                 ("Euler Dy CFG++",          sample_euler_dy_cfgpp,          ["k_euler_dy_cfgpp"],           {}                  ),
                 ("Euler SMEA Dy CFG++",     sample_euler_smea_dy_cfgpp,     ["k_euler_smea_dy_cfgpp"],      {}                  ),
-                ("Euler Negative CFG++",    sample_euler_negative_cfgpp,    ["k_euler_negative_cfgpp"],     {}                  ),
-                ("Euler Negative Dy CFG++", sample_euler_negative_dy_cfgpp, ["k_euler_negative_dy_cfgpp"],  {}                  ),
             ]
             samplers_data_cfgpp = [
                 sd_samplers_common.SamplerData(label, lambda model, funcname=funcname: KDiffusionSampler(funcname, model), aliases, options)
@@ -195,7 +185,6 @@ try:
             sampler_extra_params['sample_euler_cfgpp']             = ['s_churn', 's_tmin', 's_tmax', 's_noise']
             sampler_extra_params['sample_euler_negative_cfgpp']    = ['s_churn', 's_tmin', 's_tmax', 's_noise']
             sampler_extra_params['sample_euler_dy_cfgpp']          = ['s_churn', 's_tmin', 's_tmax', 's_noise']
-            sampler_extra_params['sample_euler_negative_dy_cfgpp'] = ['s_churn', 's_tmin', 's_tmax', 's_noise']
             sampler_extra_params['sample_euler_smea_dy_cfgpp']     = ['s_churn', 's_tmin', 's_tmax', 's_noise']
 
             sd_samplers.all_samplers.extend(samplers_data_cfgpp)

@@ -147,62 +147,6 @@ def sample_euler_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None, disa
 
     return x
 
-@torch.no_grad()
-def sample_euler_negative_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1.):
-    """CFG++ version of Euler Negative Dy by KoishiStar."""
-    extra_args = {} if extra_args is None else extra_args
-    model.need_last_noise_uncond = True
-    s_in = x.new_ones([x.shape[0]])
-
-    for i in trange(len(sigmas) - 1, disable=disable):
-        gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
-        eps = torch.randn_like(x) * s_noise
-        sigma_hat = sigmas[i] * (gamma + 1)
-        if gamma > 0:
-            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
-        denoised = model(x, sigma_hat * s_in, **extra_args)
-        d = model.last_noise_uncond
-
-        if callback is not None:
-            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigma_hat, 'denoised': denoised})
-
-        # Euler method
-        if sigmas[i + 1] > 0 and i // 2 == 1:
-            x = -denoised - d * sigmas[i+1]
-        else:
-            x = denoised + d * sigmas[i+1]
-
-        if sigmas[i + 1] > 0:
-            if i // 2 == 1:
-                x = dy_sampling_step_cfgpp(x, model, sigma_hat, **extra_args)        
-
-    return x
-
-@torch.no_grad()
-def sample_euler_negative_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1.):
-    """based on Euler Negative by KoishiStar"""
-    extra_args = {} if extra_args is None else extra_args
-    model.need_last_noise_uncond = True
-    s_in = x.new_ones([x.shape[0]])
-
-    for i in trange(len(sigmas) - 1, disable=disable):
-        gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
-        eps = torch.randn_like(x) * s_noise
-        sigma_hat = sigmas[i] * (gamma + 1)
-        if gamma > 0:
-            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
-        denoised = model(x, sigma_hat * s_in, **extra_args)
-        d = model.last_noise_uncond
-
-        if callback is not None:
-            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigma_hat, 'denoised': denoised})
-
-        # Euler method
-        if sigmas[i + 1] > 0 and i // 2 == 1:
-            x = -denoised - d * sigmas[i+1]
-        else:
-            x = denoised + d * sigmas[i+1]
-    return x
 
 
 @torch.no_grad()
