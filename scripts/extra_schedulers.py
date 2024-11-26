@@ -153,11 +153,8 @@ try:
         CosExpScheduler         = schedulers.Scheduler("cosexp",        "CosineExponential blend",  cosexpblend_scheduler)
         PhiScheduler            = schedulers.Scheduler("phi",           "Phi",                      phi_scheduler)
         LaplaceScheduler        = schedulers.Scheduler("laplace",       "Laplace",                  get_sigmas_laplace)
-
         KarrasDynScheduler      = schedulers.Scheduler("karras_dyn",    "Karras Dynamic",           get_sigmas_karras_dynamic)
-
         CustomScheduler         = schedulers.Scheduler("custom",        "custom",                   custom_scheduler)
-
 
         schedulers.schedulers.append(CosineScheduler)
         schedulers.schedulers.append(CosExpScheduler)
@@ -170,7 +167,7 @@ try:
         try:
             # CFG++ method is Forge only, not working in A1111
             import modules_forge.forge_version
-            from scripts.samplers_cfgpp import sample_euler_ancestral_cfgpp, sample_euler_cfgpp, sample_euler_dy_cfgpp, sample_euler_smea_dy_cfgpp, sample_euler_negative_cfgpp, sample_euler_negative_dy_cfgpp
+            from scripts.samplers_cfgpp import sample_euler_ancestral_cfgpp, sample_euler_cfgpp, sample_euler_dy_cfgpp, sample_euler_smea_dy_cfgpp
             samplers_cfgpp = [
                 ("Euler a CFG++",           sample_euler_ancestral_cfgpp,   ["k_euler_a_cfgpp"],            {"uses_ensd": True} ),
                 ("Euler CFG++",             sample_euler_cfgpp,             ["k_euler_cfgpp"],              {}                  ),
@@ -183,7 +180,6 @@ try:
                 if callable(funcname)
             ]
             sampler_extra_params['sample_euler_cfgpp']             = ['s_churn', 's_tmin', 's_tmax', 's_noise']
-            sampler_extra_params['sample_euler_negative_cfgpp']    = ['s_churn', 's_tmin', 's_tmax', 's_noise']
             sampler_extra_params['sample_euler_dy_cfgpp']          = ['s_churn', 's_tmin', 's_tmax', 's_noise']
             sampler_extra_params['sample_euler_smea_dy_cfgpp']     = ['s_churn', 's_tmin', 's_tmax', 's_noise']
 
@@ -204,7 +200,6 @@ try:
         sd_samplers.all_samplers.extend(samplers_data_extra)
         sd_samplers.all_samplers_map = {x.name: x for x in sd_samplers.all_samplers}
         sd_samplers.set_samplers()
-
 
     ExtraScheduler.installed = True
 except:
