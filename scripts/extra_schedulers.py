@@ -1,7 +1,7 @@
 import gradio
 import math, numpy
 import torch
-from modules import scripts
+from modules import scripts, shared
 
 def cosine_scheduler (n, sigma_min, sigma_max, device):
     sigmas = torch.zeros(n, device=device)
@@ -164,7 +164,7 @@ def custom_scheduler(n, sigma_min, sigma_max, device):
             s += 1
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
-
+from scripts.simple_kes import get_sigmas_simple_kes
 
 from scripts.res_solver import sample_res_solver
 from scripts.clybius_dpmpp_4m_sde import sample_clyb_4m_sde_momentumized
@@ -202,12 +202,25 @@ class ExtraScheduler(scripts.Script):
             custom_sigmas = script_args[0]
             ExtraScheduler.customSigmas = custom_sigmas
             params.extra_generation_params.update(dict(es_custom = ExtraScheduler.customSigmas, ))
+        elif params.scheduler == 'Simple KES':
+            params.extra_generation_params.update(dict(
+                es_KES_start_blend       = getattr(shared.opts, 'kes_start_blend'),
+                es_KES_end_blend         = getattr(shared.opts, 'kes_end_blend'),
+                es_KES_sharpness         = getattr(shared.opts, 'kes_sharpness'),
+                es_KES_initial_step_size = getattr(shared.opts, 'kes_initial_step_size'),
+                es_KES_final_step_size   = getattr(shared.opts, 'kes_final_step_size'),
+                es_KES_initial_noise     = getattr(shared.opts, 'kes_initial_noise'),
+                es_KES_final_noise       = getattr(shared.opts, 'kes_final_noise'),
+                es_KES_smooth_blend      = getattr(shared.opts, 'kes_smooth_blend'),
+                es_KES_step_size_factor  = getattr(shared.opts, 'kes_step_size_factor'),
+                es_KES_noise_scale       = getattr(shared.opts, 'kes_noise_scale'),
+            ))
         return
 
 try:
     import modules.sd_schedulers as schedulers
 
-    if "name='custom'" not in str(schedulers.schedulers[-1]):
+    if "name='custom'" not in str(schedulers.schedulers[-1]):   # this is a bit lazy tbh
         print ("Extension: Extra Schedulers: adding new schedulers")
         CosineScheduler         = schedulers.Scheduler("cosine",        "Cosine",                   cosine_scheduler)
         CosExpScheduler         = schedulers.Scheduler("cosexp",        "CosineExponential blend",  cosexpblend_scheduler)
@@ -221,6 +234,8 @@ try:
         KarrasDynScheduler      = schedulers.Scheduler("karras_dyn",    "Karras Dynamic",           get_sigmas_karras_dynamic)
         KarrasExpDecayScheduler = schedulers.Scheduler("karras_exp_d",  "Karras Exp Decay",         get_sigmas_karras_exponential_decay)
         KarrasExpIncScheduler   = schedulers.Scheduler("karras_exp_i",  "Karras Exp Inc",           get_sigmas_karras_exponential_increment)
+
+        SimpleKEScheduler       = schedulers.Scheduler("simple_kes",    "Simple KES",               get_sigmas_simple_kes)
 
         CustomScheduler         = schedulers.Scheduler("custom",        "custom",                   custom_scheduler)
 
@@ -237,6 +252,8 @@ try:
         schedulers.schedulers.append(KarrasDynScheduler)
         schedulers.schedulers.append(KarrasExpDecayScheduler)
         schedulers.schedulers.append(KarrasExpIncScheduler)
+
+        schedulers.schedulers.append(SimpleKEScheduler)
 
         schedulers.schedulers.append(CustomScheduler)
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
@@ -281,7 +298,6 @@ try:
         sd_samplers.all_samplers.extend(samplers_data_extra)
         sd_samplers.all_samplers_map = {x.name: x for x in sd_samplers.all_samplers}
         sd_samplers.set_samplers()
-
 
     ExtraScheduler.installed = True
 except:
