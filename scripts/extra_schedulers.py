@@ -166,8 +166,10 @@ def custom_scheduler(n, sigma_min, sigma_max, device):
 
 from scripts.simple_kes import get_sigmas_simple_kes
 
-from scripts.res_solver import sample_res_solver
+from scripts.res_solver import sample_res_solver, sample_res_multistep, sample_res_multistep_cfgpp
 from scripts.clybius_dpmpp_4m_sde import sample_clyb_4m_sde_momentumized
+from scripts.gradient_estimation import sample_gradient_e, sample_gradient_e_cfgpp
+
 from modules import sd_samplers_common, sd_samplers
 from modules.sd_samplers_kdiffusion import sampler_extra_params, KDiffusionSampler
 
@@ -269,6 +271,8 @@ try:
                 ("Euler SMEA Dy CFG++",     sample_euler_smea_dy_cfgpp,     ["k_euler_smea_dy_cfgpp"],      {}                  ),
                 ("Euler Negative CFG++",    sample_euler_negative_cfgpp,    ["k_euler_negative_cfgpp"],     {}                  ),
                 ("Euler Negative Dy CFG++", sample_euler_negative_dy_cfgpp, ["k_euler_negative_dy_cfgpp"],  {}                  ),
+                ("RES multistep CFG++",     sample_res_multistep_cfgpp,     ["k_res_multi_cfgpp"],          {}),
+                ("Gradient Estimation CFG++", sample_gradient_e_cfgpp,      ["k_grad_est_cfgpp"],          {}),
             ]
             samplers_data_cfgpp = [
                 sd_samplers_common.SamplerData(label, lambda model, funcname=funcname: KDiffusionSampler(funcname, model), aliases, options)
@@ -286,8 +290,10 @@ try:
             pass
 
         samplers_extra = [
+            ("RES multistep",                sample_res_multistep,              ["k_res_multi"],        {}),
             ("Refined Exponential Solver",   sample_res_solver,                 ["k_res"],              {}),
             ("DPM++ 4M SDE",                 sample_clyb_4m_sde_momentumized,   ["k_dpmpp_4m_sde"],     {}),
+            ("Gradient Estimation",          sample_gradient_e,                 ["k_grad_est"],         {}),
         ]
         samplers_data_extra = [
             sd_samplers_common.SamplerData(label, lambda model, funcname=funcname: KDiffusionSampler(funcname, model), aliases, options)

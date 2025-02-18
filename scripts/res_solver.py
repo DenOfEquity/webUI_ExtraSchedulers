@@ -1,17 +1,24 @@
-# credit to Katherine Crowson, Birch-san, Clybius
-# following is from Clybius Comfy Extra Samplers with minimal edits
-
 import torch
 from torch import no_grad, FloatTensor
 from tqdm import tqdm
-from tqdm.auto import trange
 from itertools import pairwise
 from typing import Protocol, Optional, Dict, Any, TypedDict, NamedTuple, Union, List
 import math
 
+from tqdm.auto import trange
+
 #   copied from kdiffusion/sampling.py and utils.py
 def default_noise_sampler(x):
     return lambda sigma, sigma_next: torch.randn_like(x)
+def append_dims(x, target_dims):
+    """Appends dimensions to the end of a tensor until it has target_dims dimensions."""
+    dims_to_append = target_dims - x.ndim
+    if dims_to_append < 0:
+        raise ValueError(f'input has {x.ndim} dims but target_dims is {target_dims}, which is less')
+    return x[(...,) + (None,) * dims_to_append]
+def to_d(x, sigma, denoised):
+    """Converts a denoiser output to a Karras ODE derivative."""
+    return (x - denoised) / append_dims(sigma, x.ndim)
 
 
 class DenoiserModel(Protocol):
@@ -193,9 +200,9 @@ def _refined_exp_sosu_step(
   h: float = lam_next - lam
   a2_1, b1, b2 = _de_second_order(h=h, c2=c2, simple_phi_calc=simple_phi_calc)
   
-  denoised: FloatTensor = model(x, sigma, **extra_args)
-  if pbar is not None:
-    pbar.update(0.5)
+  denoised: FloatTensor = model(x, sigma.repeat(x.size(0)), **extra_args)
+  # if pbar is not None:
+    # pbar.update(0.5)
 
   c2_h: float = c2*h
 
@@ -205,9 +212,9 @@ def _refined_exp_sosu_step(
   lam_2: float = lam + c2_h
   sigma_2: float = lam_2.neg().exp()
 
-  denoised2: FloatTensor = model(x_2, sigma_2, **extra_args)
+  denoised2: FloatTensor = model(x_2, sigma_2.repeat(x_2.size(0)), **extra_args)
   if pbar is not None:
-    pbar.update(0.5)
+    pbar.update()
 
   diff = momentum_func(h*(b1*denoised + b2*denoised2), vel, time)
   vel = diff
@@ -252,13 +259,12 @@ def sample_refined_exp_s(
     callback (`RefinedExpCallback`, *optional*, defaults to `None`): you can supply this callback to see the intermediate denoising results, e.g. to preview each step of the denoising process
     disable (`bool`, *optional*, defaults to `False`): whether to hide `tqdm`'s progress bar animation from being printed
     ita (`FloatTensor`, *optional*, defaults to 0.): degree of stochasticity, η, for each timestep. tensor shape must be broadcastable to 1-dimensional tensor with length `len(sigmas) if denoise_to_zero else len(sigmas)-1`. each element should be from 0 to 1.
+         - if used: batch noise doesn't match non-batch
     c2 (`float`, *optional*, defaults to .5): partial step size for solving ODE. .5 = midpoint method
     noise_sampler (`NoiseSampler`, *optional*, defaults to `torch.randn_like`): method used for adding noise
     simple_phi_calc (`bool`, *optional*, defaults to `True`): True = calculate phi_i,j(-h) via simplified formulae specific to j={1,2}. False = Use general solution that works for any j. Mathematically equivalent, but could be numeric differences.
   """
   #assert sigmas[-1] == 0
-  noise_sampler = default_noise_sampler(x)
-
   device = x.device
   ita = ita.to(device)
   sigmas = sigmas.to(device)
@@ -266,13 +272,12 @@ def sample_refined_exp_s(
   sigma_min, sigma_max = sigmas[sigmas > 0].min(), sigmas.max()
 
   vel, vel_2 = None, None
-  
   with tqdm(disable=disable, total=len(sigmas)-(1 if denoise_to_zero else 2)) as pbar:
     for i, (sigma, sigma_next) in enumerate(pairwise(sigmas[:-1].split(1))):
       time = sigmas[i] / sigma_max
       if 'sigma' not in locals():
         sigma = sigmas[i]
-      eps = noise_sampler(sigma, sigma_next).float().to(device)
+      eps = torch.randn_like(x).float()
       sigma_hat = sigma * (1 + ita)
       x_hat = x + (sigma_hat ** 2 - sigma ** 2).sqrt() * eps
       x_next, denoised, denoised2, vel, vel_2 = _refined_exp_sosu_step(
@@ -301,10 +306,10 @@ def sample_refined_exp_s(
         callback(payload)
       x = x_next
     if denoise_to_zero:
-      eps = noise_sampler(sigma, sigma_next).float().to(device)
+      eps = torch.randn_like(x).float()
       sigma_hat = sigma * (1 + ita)
       x_hat = x + (sigma_hat ** 2 - sigma ** 2).sqrt() * eps
-      x_next: FloatTensor = model(x_hat, sigma.to(x_hat.device), **extra_args)
+      x_next: FloatTensor = model(x_hat, sigma.to(x_hat.device).repeat(x_hat.size(0)), **extra_args)
       pbar.update()
 
       if callback is not None:
@@ -318,11 +323,73 @@ def sample_refined_exp_s(
         )
         callback(payload)
 
-      x = x_next
 
+      x = x_next
   return x
 
 # Many thanks to Kat + Birch-San for this wonderful sampler implementation! https://github.com/Birch-san/sdxl-play/commits/res/
-def sample_res_solver(model, x, sigmas, extra_args=None, callback=None, disable=None, noise_sampler_type="gaussian", noise_sampler=None, denoise_to_zero=True, simple_phi_calc=False, c2=0.5, ita=torch.Tensor((0.25,)), momentum=0.0):
+def sample_res_solver(model, x, sigmas, extra_args=None, callback=None, disable=None, noise_sampler_type="gaussian", noise_sampler=None, denoise_to_zero=True, simple_phi_calc=False, c2=0.5, ita=torch.Tensor((0.0,)), momentum=0.0):
     return sample_refined_exp_s(model, x, sigmas, extra_args=extra_args, callback=callback, disable=disable, noise_sampler=noise_sampler, denoise_to_zero=denoise_to_zero, simple_phi_calc=simple_phi_calc, c2=c2, ita=ita, momentum=momentum)
+
+
+##  modified from ReForge, original implementation ComfyUI
+@torch.no_grad()
+def res_multistep(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1., noise_sampler=None, cfgpp=False):
+    extra_args = {} if extra_args is None else extra_args
+    seed = extra_args.get("seed", None)
+    noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
+    s_in = x.new_ones([x.shape[0]])
+    sigma_fn = lambda t: t.neg().exp()
+    t_fn = lambda sigma: sigma.log().neg()
+    phi1_fn = lambda t: torch.expm1(t) / t
+    phi2_fn = lambda t: (phi1_fn(t) - 1.0) / t
+    old_denoised = None
+
+    if cfgpp:
+        model.need_last_noise_uncond = True
+
+    for i in trange(len(sigmas) - 1, disable=disable):
+        if s_churn > 0:
+            gamma = min(s_churn / (len(sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.0
+            sigma_hat = sigmas[i] * (gamma + 1)
+        else:
+            gamma = 0
+            sigma_hat = sigmas[i]
+        if gamma > 0:
+            eps = torch.randn_like(x) * s_noise
+            x = x + eps * (sigma_hat**2 - sigmas[i] ** 2) ** 0.5
+        denoised = model(x, sigma_hat * s_in, **extra_args)
+
+        if callback is not None:
+            callback({"x": x, "i": i, "sigma": sigmas[i], "sigma_hat": sigma_hat, "denoised": denoised})
+        if sigmas[i + 1] == 0 or old_denoised is None:
+            # Euler method
+            if cfgpp:
+                d = model.last_noise_uncond
+                x = denoised + d * sigmas[i + 1]
+            else:
+                d = to_d(x, sigma_hat, denoised)
+                dt = sigmas[i + 1] - sigma_hat
+                x = x + d * dt
+        else:
+            # Second order multistep method in https://arxiv.org/pdf/2308.02157
+            t, t_next, t_prev = t_fn(sigmas[i]), t_fn(sigmas[i + 1]), t_fn(sigmas[i - 1])
+            h = t_next - t
+            c2 = (t_prev - t) / h
+            phi1_val, phi2_val = phi1_fn(-h), phi2_fn(-h)
+            b1 = torch.nan_to_num(phi1_val - 1.0 / c2 * phi2_val, nan=0.0)
+            b2 = torch.nan_to_num(1.0 / c2 * phi2_val, nan=0.0)
+            if cfgpp:
+                d = model.last_noise_uncond
+                x = denoised + d * sigma_hat
+
+            x = (sigma_fn(t_next) / sigma_fn(t)) * x + h * (b1 * denoised + b2 * old_denoised)
+        old_denoised = denoised
+    return x
+@torch.no_grad()
+def sample_res_multistep(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1., noise_sampler=None):
+    return res_multistep(model, x, sigmas, extra_args=extra_args, callback=callback, disable=disable, s_churn=s_churn, s_tmin=s_tmin, s_tmax=s_tmax, s_noise=s_noise, noise_sampler=noise_sampler, cfgpp=False)
+@torch.no_grad()
+def sample_res_multistep_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1., noise_sampler=None):
+    return res_multistep(model, x, sigmas, extra_args=extra_args, callback=callback, disable=disable, s_churn=s_churn, s_tmin=s_tmin, s_tmax=s_tmax, s_noise=s_noise, noise_sampler=noise_sampler, cfgpp=True)
 
