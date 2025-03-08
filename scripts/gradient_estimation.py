@@ -24,6 +24,8 @@ def sample_gradient_e(model, x, sigmas, extra_args=None, callback=None, disable=
     s_in = x.new_ones([x.shape[0]])
     old_d = None
 
+    sigmas = sigmas.to(x.device)
+
     for i in trange(len(sigmas) - 1, disable=disable):
         denoised = model(x, sigmas[i] * s_in, **extra_args)
         
