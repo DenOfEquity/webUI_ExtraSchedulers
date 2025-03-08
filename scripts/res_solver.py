@@ -345,6 +345,8 @@ def res_multistep(model, x, sigmas, extra_args=None, callback=None, disable=None
     phi2_fn = lambda t: (phi1_fn(t) - 1.0) / t
     old_denoised = None
 
+    sigmas = sigmas.to(x.device)
+
     if cfgpp:
         model.need_last_noise_uncond = True
 
