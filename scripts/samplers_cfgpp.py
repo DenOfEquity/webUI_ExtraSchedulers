@@ -28,6 +28,7 @@ def sample_euler_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable
     """Implements Algorithm 2 (Euler steps) from Karras et al. (2022)."""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
 
     for i in trange(len(sigmas) - 1, disable=disable):
@@ -124,6 +125,7 @@ def sample_euler_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None, disa
     """CFG++ version of Euler Dy by KoishiStar."""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
 
     for i in trange(len(sigmas) - 1, disable=disable):
@@ -152,6 +154,7 @@ def sample_euler_negative_dy_cfgpp(model, x, sigmas, extra_args=None, callback=N
     """CFG++ version of Euler Negative Dy by KoishiStar."""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
 
     for i in trange(len(sigmas) - 1, disable=disable):
@@ -183,6 +186,7 @@ def sample_euler_negative_cfgpp(model, x, sigmas, extra_args=None, callback=None
     """based on Euler Negative by KoishiStar"""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
 
     for i in trange(len(sigmas) - 1, disable=disable):
@@ -210,6 +214,7 @@ def sample_euler_smea_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None,
     """CFG++ version of Euler SMEA Dy by KoishiStar."""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
 
     for i in trange(len(sigmas) - 1, disable=disable):
@@ -240,6 +245,7 @@ def sample_euler_ancestral_cfgpp(model, x, sigmas, extra_args=None, callback=Non
     extra_args = {} if extra_args is None else extra_args
     noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
 
     for i in trange(len(sigmas) - 1, disable=disable):

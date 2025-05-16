@@ -51,6 +51,7 @@ def sample_gradient_e_cfgpp(model, x, sigmas, extra_args=None, callback=None, di
     old_d = None
     
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
 
     for i in trange(len(sigmas) - 1, disable=disable):
         denoised = model(x, sigmas[i] * s_in, **extra_args)
