@@ -3,6 +3,38 @@ import math, numpy
 import torch
 from modules import scripts, shared
 
+# def get_sigmas_oss (n, sigma_min, sigma_max, device):
+    # # https://github.com/bebebe666/OptimalSteps
+    # def loglinear_interp(t_steps, num_steps):
+        # """
+        # Performs log-linear interpolation of a given array of decreasing numbers.
+        # """
+        # xs = numpy.linspace(0, 1, len(t_steps))
+        # ys = numpy.log(t_steps[::-1])
+
+        # new_xs = numpy.linspace(0, 1, num_steps)
+        # new_ys = numpy.interp(new_xs, xs, ys)
+
+        # interped_ys = numpy.exp(new_ys)[::-1].copy()
+        # return interped_ys
+
+    # if not shared.sd_model.is_webui_legacy_model():
+        # sigmas = [0.9968, 0.9886, 0.9819, 0.975, 0.966, 0.9471, 0.9158, 0.8287, 0.5512, 0.2808, 0.001]
+    # elif shared.sd_model.is_sd3:  #same as flux, but here for ease of changing later
+        # sigmas = [0.9968, 0.9886, 0.9819, 0.975, 0.966, 0.9471, 0.9158, 0.8287, 0.5512, 0.2808, 0.001]
+    # elif shared.sd_model.is_sdxl:   # fallback AYS11
+        # sigmas = [14.615, 6.315, 3.771, 2.181, 1.342, 0.862, 0.555, 0.380, 0.234, 0.113, 0.029]
+    # else:                           # fallback AYS11
+        # sigmas = [14.615, 6.475, 3.861, 2.697, 1.886, 1.396, 0.963, 0.652, 0.399, 0.152, 0.029]
+
+    # if n != len(sigmas):
+        # sigmas = numpy.append(loglinear_interp(sigmas, n), [0.0])
+    # else:
+        # sigmas.append(0.0)
+
+    # return torch.FloatTensor(sigmas).to(device)
+
+
 def cosine_scheduler (n, sigma_min, sigma_max, device):
     sigmas = torch.zeros(n, device=device)
     if n == 1:
@@ -13,6 +45,24 @@ def cosine_scheduler (n, sigma_min, sigma_max, device):
             C = sigma_min + 0.5*(sigma_max-sigma_min)*(1 - math.cos(math.pi*(1 - p**0.5)))
             sigmas[x] = C
     return torch.cat([sigmas, sigmas.new_zeros([1])])
+
+def cosexpblend_boost_scheduler (n, sigma_min, sigma_max, device):
+    sigmas = []
+    if n == 1:
+        sigmas.append(sigma_max ** 0.5)
+    else:
+        K = (sigma_min / sigma_max)**(1/(n-1))
+        E = sigma_max
+        detail = numpy.interp(numpy.linspace(0, 1, n), numpy.linspace(0, 1, 5), [1.0, 1.0, 1.27, 1.0, 1.0])
+        for x in range(n):
+            p = x / (n-1)
+            C = sigma_min + 0.5*(sigma_max-sigma_min)*(1 - math.cos(math.pi*(1 - p**0.5)))
+            sigmas.append(detail[x] * (C + p * (E - C)))
+            E *= K
+
+    sigmas += [0.0]
+    return torch.FloatTensor(sigmas).to(device)
+
 
 def cosexpblend_scheduler (n, sigma_min, sigma_max, device):
     sigmas = []
@@ -26,6 +76,7 @@ def cosexpblend_scheduler (n, sigma_min, sigma_max, device):
             C = sigma_min + 0.5*(sigma_max-sigma_min)*(1 - math.cos(math.pi*(1 - p**0.5)))
             sigmas.append(C + p * (E - C))
             E *= K
+
     sigmas += [0.0]
     return torch.FloatTensor(sigmas).to(device)
 
@@ -139,6 +190,9 @@ def custom_scheduler(n, sigma_min, sigma_max, device):
             for x in range(len(sigmasList)):
                 sigmasList[x] *= (sigma_max - sigma_min)
                 sigmasList[x] += sigma_min
+        elif sigmasList[-1] == 0.0:
+            #don't interpolate to number of steps, use as is
+            return torch.tensor(sigmasList)
 
         xs = numpy.linspace(0, 1, len(sigmasList))
         ys = numpy.log(sigmasList[::-1])
@@ -150,7 +204,8 @@ def custom_scheduler(n, sigma_min, sigma_max, device):
         sigmas = torch.tensor(interpolated_ys, device=device)
     else:
         sigmas = torch.linspace(sigma_max, sigma_min, n, device=device)
-        
+        detail = numpy.interp(numpy.linspace(0, 1, n), numpy.linspace(0, 1, 5), [1.0, 1.0, 1.25, 1.0, 1.0])
+
         phi = (1 + 5**0.5) / 2
         pi = math.pi
         
@@ -159,9 +214,11 @@ def custom_scheduler(n, sigma_min, sigma_max, device):
             x = (s) / (n - 1)
             M = sigma_max
             m = sigma_min
+            d = detail[s]
         
             sigmas[s] = eval((ExtraScheduler.customSigmas))
             s += 1
+
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
 from scripts.simple_kes import get_sigmas_simple_kes
@@ -226,6 +283,7 @@ try:
         print ("Extension: Extra Schedulers: adding new schedulers")
         CosineScheduler         = schedulers.Scheduler("cosine",        "Cosine",                   cosine_scheduler)
         CosExpScheduler         = schedulers.Scheduler("cosexp",        "CosineExponential blend",  cosexpblend_scheduler)
+        CosExpBScheduler        = schedulers.Scheduler("cosprev",       "CosExp blend boost",       cosexpblend_boost_scheduler)
         PhiScheduler            = schedulers.Scheduler("phi",           "Phi",                      phi_scheduler)
         VPScheduler             = schedulers.Scheduler("vp",            "VP",                       get_sigmas_vp)
         LaplaceScheduler        = schedulers.Scheduler("laplace",       "Laplace",                  get_sigmas_laplace)
@@ -239,11 +297,14 @@ try:
 
         SimpleKEScheduler       = schedulers.Scheduler("simple_kes",    "Simple KES",               get_sigmas_simple_kes)
 
+        # OSSFlowScheduler        = schedulers.Scheduler("optimal_ss",    "Optimal Steps",            get_sigmas_oss)
+
         CustomScheduler         = schedulers.Scheduler("custom",        "custom",                   custom_scheduler)
 
 
         schedulers.schedulers.append(CosineScheduler)
         schedulers.schedulers.append(CosExpScheduler)
+        schedulers.schedulers.append(CosExpBScheduler)
         schedulers.schedulers.append(PhiScheduler)
         schedulers.schedulers.append(VPScheduler)
         schedulers.schedulers.append(LaplaceScheduler)
@@ -257,6 +318,8 @@ try:
 
         schedulers.schedulers.append(SimpleKEScheduler)
 
+        # schedulers.schedulers.append(OSSFlowScheduler)
+
         schedulers.schedulers.append(CustomScheduler)
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
 
@@ -264,6 +327,7 @@ try:
             # CFG++ method is Forge only, not working in A1111
             import modules_forge.forge_version
             from scripts.samplers_cfgpp import sample_euler_ancestral_cfgpp, sample_euler_cfgpp, sample_euler_dy_cfgpp, sample_euler_smea_dy_cfgpp, sample_euler_negative_cfgpp, sample_euler_negative_dy_cfgpp
+            from scripts.forgeClassic_cfgpp import sample_dpmpp_sde_cfgpp, sample_dpmpp_2m_cfgpp, sample_dpmpp_2m_sde_cfgpp, sample_dpmpp_3m_sde_cfgpp, sample_dpmpp_2s_ancestral_cfgpp
             samplers_cfgpp = [
                 ("Euler a CFG++",           sample_euler_ancestral_cfgpp,   ["k_euler_a_cfgpp"],            {"uses_ensd": True} ),
                 ("Euler CFG++",             sample_euler_cfgpp,             ["k_euler_cfgpp"],              {}                  ),
@@ -271,8 +335,13 @@ try:
                 ("Euler SMEA Dy CFG++",     sample_euler_smea_dy_cfgpp,     ["k_euler_smea_dy_cfgpp"],      {}                  ),
                 ("Euler Negative CFG++",    sample_euler_negative_cfgpp,    ["k_euler_negative_cfgpp"],     {}                  ),
                 ("Euler Negative Dy CFG++", sample_euler_negative_dy_cfgpp, ["k_euler_negative_dy_cfgpp"],  {}                  ),
-                ("RES multistep CFG++",     sample_res_multistep_cfgpp,     ["k_res_multi_cfgpp"],          {}),
-                ("Gradient Estimation CFG++", sample_gradient_e_cfgpp,      ["k_grad_est_cfgpp"],          {}),
+                ("RES multistep CFG++",     sample_res_multistep_cfgpp,     ["k_res_multi_cfgpp"],          {}                  ),
+                ("Gradient Estimation CFG++", sample_gradient_e_cfgpp,      ["k_grad_est_cfgpp"],           {}                  ),
+                ("DPM++ SDE CFG++",         sample_dpmpp_sde_cfgpp,         ["k_dpmpp_sde_cfgpp"],          {"brownian_noise": True, "second_order": True} ),
+                ("DPM++ 2M CFG++",          sample_dpmpp_2m_cfgpp,          ["k_dpmpp_2m_cfgpp"],           {}                  ),
+                ("DPM++ 2M SDE CFG++",      sample_dpmpp_2m_sde_cfgpp,      ["k_dpmpp_2m_sde_cfgpp"],       {"brownian_noise": True} ),
+                ("DPM++ 3M SDE CFG++",      sample_dpmpp_3m_sde_cfgpp,      ["k_dpmpp_3m_sde_cfgpp"],       {"brownian_noise": True, 'discard_next_to_last_sigma': True} ),
+                ("DPM++ 2S a CFG++",        sample_dpmpp_2s_ancestral_cfgpp,["k_dpmpp_2s_a_cfgpp"],         {"uses_ensd": True, "second_order": True} ),
             ]
             samplers_data_cfgpp = [
                 sd_samplers_common.SamplerData(label, lambda model, funcname=funcname: KDiffusionSampler(funcname, model), aliases, options)
@@ -284,6 +353,11 @@ try:
             sampler_extra_params['sample_euler_dy_cfgpp']          = ['s_churn', 's_tmin', 's_tmax', 's_noise']
             sampler_extra_params['sample_euler_negative_dy_cfgpp'] = ['s_churn', 's_tmin', 's_tmax', 's_noise']
             sampler_extra_params['sample_euler_smea_dy_cfgpp']     = ['s_churn', 's_tmin', 's_tmax', 's_noise']
+
+            sampler_extra_params['sample_dpmpp_sde_cfgpp']         = ['s_noise']
+            sampler_extra_params['sample_dpmpp_2m_sde_cfgpp']      = ['s_noise']
+            sampler_extra_params['sample_dpmpp_3m_sde_cfgpp']      = ['s_noise']
+            sampler_extra_params['sample_dpmpp_2s_ancestral_cfgpp']= ['s_noise']
 
             sd_samplers.all_samplers.extend(samplers_data_cfgpp)
         except:
