@@ -225,7 +225,8 @@ from scripts.simple_kes import get_sigmas_simple_kes
 
 from scripts.res_solver import sample_res_solver, sample_res_multistep, sample_res_multistep_cfgpp
 from scripts.clybius_dpmpp_4m_sde import sample_clyb_4m_sde_momentumized
-from scripts.gradient_estimation import sample_gradient_e, sample_gradient_e_cfgpp
+from scripts.gradient_estimation import sample_gradient_e, sample_gradient_e_cfgpp, sample_ge_dpm2_cfgpp
+from scripts.seeds import sample_seeds_2, sample_seeds_3
 
 from modules import sd_samplers_common, sd_samplers
 from modules.sd_samplers_kdiffusion import sampler_extra_params, KDiffusionSampler
@@ -337,6 +338,7 @@ try:
                 ("Euler Negative Dy CFG++", sample_euler_negative_dy_cfgpp, ["k_euler_negative_dy_cfgpp"],  {}                  ),
                 ("RES multistep CFG++",     sample_res_multistep_cfgpp,     ["k_res_multi_cfgpp"],          {}                  ),
                 ("Gradient Estimation CFG++", sample_gradient_e_cfgpp,      ["k_grad_est_cfgpp"],           {}                  ),
+                ("GE/DPM2 CFG++",           sample_ge_dpm2_cfgpp,           ["k_ge_dpm_cfgpp"],             {}                  ),
                 ("DPM++ SDE CFG++",         sample_dpmpp_sde_cfgpp,         ["k_dpmpp_sde_cfgpp"],          {"brownian_noise": True, "second_order": True} ),
                 ("DPM++ 2M CFG++",          sample_dpmpp_2m_cfgpp,          ["k_dpmpp_2m_cfgpp"],           {}                  ),
                 ("DPM++ 2M SDE CFG++",      sample_dpmpp_2m_sde_cfgpp,      ["k_dpmpp_2m_sde_cfgpp"],       {"brownian_noise": True} ),
@@ -368,7 +370,13 @@ try:
             ("Refined Exponential Solver",   sample_res_solver,                 ["k_res"],              {}),
             ("DPM++ 4M SDE",                 sample_clyb_4m_sde_momentumized,   ["k_dpmpp_4m_sde"],     {}),
             ("Gradient Estimation",          sample_gradient_e,                 ["k_grad_est"],         {}),
+            ("SEEDS-2",                      sample_seeds_2,                    ["k_seeds2"],         {}),
+            ("SEEDS-3",                      sample_seeds_3,                    ["k_seeds3"],         {}),
         ]
+
+        sampler_extra_params['sample_seeds_2']         = ['s_noise']
+        sampler_extra_params['sample_seeds_3']         = ['s_noise']
+
         samplers_data_extra = [
             sd_samplers_common.SamplerData(label, lambda model, funcname=funcname: KDiffusionSampler(funcname, model), aliases, options)
             for label, funcname, aliases, options in samplers_extra
