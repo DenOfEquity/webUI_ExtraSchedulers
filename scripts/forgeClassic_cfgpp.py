@@ -68,7 +68,7 @@ def sample_dpmpp_sde_cfgpp(model, x, sigmas, extra_args=None, callback=None, dis
             x_2 = (_sigma_fn(s_) / _sigma_fn(t)) * x - (t - s_).expm1() * denoised
             x_2 = x_2 + noise_sampler(_sigma_fn(t), _sigma_fn(s)) * s_noise * su
             denoised_2 = model(x_2, _sigma_fn(s) * s_in, **extra_args)
-            u = x_2 - model.last_noise_uncond * _sigma_fn(s) * s_in                                             #d=(x-u)/sigma; d*sigma=x-u; u=x-d*sigma
+            u = x_2 - model.last_noise_uncond * _sigma_fn(s) * s_in[:1]
 
             sd, su = get_ancestral_step(_sigma_fn(t), _sigma_fn(t_next), eta)
             denoised_d = (1 - fac) * u + fac * u
@@ -90,7 +90,7 @@ def sample_dpmpp_2m_cfgpp(model, x, sigmas, extra_args=None, callback=None, disa
 
     for i in trange(len(sigmas) - 1, disable=disable):
         denoised = model(x, sigmas[i] * s_in, **extra_args)
-        uncond_denoised = x - model.last_noise_uncond * sigmas[i] * s_in
+        uncond_denoised = x - model.last_noise_uncond * sigmas[i] * s_in[:1]
         if callback is not None:
             callback(
                 {
@@ -136,7 +136,7 @@ def sample_dpmpp_3m_sde_cfgpp(model, x, sigmas, extra_args=None, callback=None, 
 
     for i in trange(len(sigmas) - 1, disable=disable):
         denoised = model(x, sigmas[i] * s_in, **extra_args)
-        u = x - model.last_noise_uncond * sigmas[i] * s_in                                            #d=(x-u)/sigma; d*sigma=x-u; u=x-d*sigma
+        u = x - model.last_noise_uncond * sigmas[i] * s_in[:1]
         if callback is not None:
             callback(
                 {
@@ -198,7 +198,7 @@ def sample_dpmpp_2m_sde_cfgpp(model, x, sigmas, extra_args=None, callback=None, 
 
     for i in trange(len(sigmas) - 1, disable=disable):
         denoised = model(x, sigmas[i] * s_in, **extra_args)
-        u = x - model.last_noise_uncond * sigmas[i] * s_in
+        u = x - model.last_noise_uncond * sigmas[i] * s_in[:1]
         if callback is not None:
             callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
         if sigmas[i + 1] == 0:
@@ -251,7 +251,7 @@ def sample_dpmpp_2s_ancestral_cfgpp(model, x, sigmas, extra_args=None, callback=
             dt = sigma_down - sigmas[i]
             x = denoised + d * sigma_down
         else:
-            u = x - model.last_noise_uncond * sigmas[i] * s_in
+            u = x - model.last_noise_uncond * sigmas[i] * s_in[:1]
 
             # DPM-Solver++(2S)
             t, t_next = t_fn(sigmas[i]), t_fn(sigma_down)
