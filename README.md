@@ -6,13 +6,13 @@
 >not for old Forge. For some related stuff in old Forge, see my old [OverrideScheduler extension](https://github.com/DenOfEquity/SchedRide).
 
 ### What do? ###
-Adds six new schedulers to the dropdown list:
+Adds six (+more) new schedulers to the dropdown list:
 * cosine: follows a, you guessed it, cosine curve. Initial drop is relatively slow.
 * cosine-exponential blend: starts cosine, ends up exponential (long tail).
 * phi: (based on original by [Extraltodeus](https://github.com/Extraltodeus/sigmas_tools_and_the_golden_scheduler))
 * Laplace: (credit Tiankai et al. (2024), via Comfy)
 * Karras Dynamic: (via yoinked-h)
-* custom: either a list of sigmas [1.0, 0.6, 0.25, 0.1, 0.0] or an expression that will be evaluated for each sampling step. A list will be log-linear interpolated to the number of sampling steps. A list starting with 1.0 and ending with 0.0 will be scaled between sigma_max and sigma_min. Otherwise list will be interpreted as is.
+* custom: either a list of sigmas [1.0, 0.6, 0.25, 0.1, 0.0] or an expression that will be evaluated for each sampling step. A list will be log-linear interpolated to the number of sampling steps. A list starting with 1.0 and ending with 0.0 will be scaled between sigma_max and sigma_min. Otherwise list will be interpreted as is. (lumina2 1st draft: [1.0, 0.99, 0.97, 0.94, 0.89, 0.8, 0.65, 0.47, 0.25, 0.1, 0.05])
   * *m*: minimum sigma (adjustable in **Settings**, usually ~0.03)
   * *M*: maximum sigma (adjustable in **Settings**, usually ~14.6)
   * *n*: total steps
@@ -20,7 +20,7 @@ Adds six new schedulers to the dropdown list:
   * *x*: step / (total steps - 1)
   * *phi*: (1 + sqrt(5)) / 2
 
-Adds six new samplers:
+Adds six (+more) new samplers:
 * Euler a CFG++ [Forge only]
 * Euler CFG++ [Forge only]
 * Euler Dy CFG++ (based on Euler Dy by Koishi-Star) [Forge only]
@@ -29,7 +29,7 @@ Adds six new samplers:
 * DPM++ 4M SDE (credit: Clybius)
   
 ### Why do? ###
-Different results, sometimes better. I tend to use cosine-exponential blend most of the time.
+Different results, sometimes better. I tend to use *cosine-exponential blend* or *CosExp blend boost* most of the time.
 
 ### How do? ###
 *(schedulers)* It's just a calculation of different number sequences travelling from sigma_max to sigma_min over the set number of sampling steps, guiding the denoising process. Infinite possibilities, but few sweet spots.
@@ -44,3 +44,6 @@ Then, go back to the **Installed** tab and hit **Apply and restart UI**.
 
 ### more? ###
 Check the 'neg' branch instead.
+
+### this is 'neg' branch?
+Yes. Enjoy more.
