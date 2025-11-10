@@ -1,26 +1,10 @@
 import torch
 from tqdm.auto import trange
 
-#   copied from kdiffusion/sampling.py and utils.py
-def default_noise_sampler(x):
-    return lambda sigma, sigma_next: torch.randn_like(x)
-def get_ancestral_step(sigma_from, sigma_to, eta=1.):
-    """Calculates the noise level (sigma_down) to step down to and the amount
-    of noise to add (sigma_up) when doing an ancestral sampling step."""
-    if not eta:
-        return sigma_to, 0.
-    sigma_up = min(sigma_to, eta * (sigma_to ** 2 * (sigma_from ** 2 - sigma_to ** 2) / sigma_from ** 2) ** 0.5)
-    sigma_down = (sigma_to ** 2 - sigma_up ** 2) ** 0.5
-    return sigma_down, sigma_up
-def append_dims(x, target_dims):
-    """Appends dimensions to the end of a tensor until it has target_dims dimensions."""
-    dims_to_append = target_dims - x.ndim
-    if dims_to_append < 0:
-        raise ValueError(f'input has {x.ndim} dims but target_dims is {target_dims}, which is less')
-    return x[(...,) + (None,) * dims_to_append]
-def to_d(x, sigma, denoised):
-    """Converts a denoiser output to a Karras ODE derivative."""
-    return (x - denoised) / append_dims(sigma, x.ndim)
+from k_diffusion.sampling import (
+    default_noise_sampler,
+    get_ancestral_step,
+)
 
 
 @torch.no_grad()
@@ -28,6 +12,7 @@ def sample_euler_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable
     """Implements Algorithm 2 (Euler steps) from Karras et al. (2022)."""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
 
     for i in trange(len(sigmas) - 1, disable=disable):
@@ -124,6 +109,7 @@ def sample_euler_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None, disa
     """CFG++ version of Euler Dy by KoishiStar."""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
 
     for i in trange(len(sigmas) - 1, disable=disable):
@@ -147,6 +133,64 @@ def sample_euler_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None, disa
 
     return x
 
+@torch.no_grad()
+def sample_euler_negative_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1.):
+    """CFG++ version of Euler Negative Dy by KoishiStar."""
+    extra_args = {} if extra_args is None else extra_args
+    model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
+    s_in = x.new_ones([x.shape[0]])
+
+    for i in trange(len(sigmas) - 1, disable=disable):
+        gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
+        eps = torch.randn_like(x) * s_noise
+        sigma_hat = sigmas[i] * (gamma + 1)
+        if gamma > 0:
+            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
+        denoised = model(x, sigma_hat * s_in, **extra_args)
+        d = model.last_noise_uncond
+
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigma_hat, 'denoised': denoised})
+
+        # Euler method
+        if sigmas[i + 1] > 0 and i // 2 == 1:
+            x = -denoised - d * sigmas[i+1]
+        else:
+            x = denoised + d * sigmas[i+1]
+
+        if sigmas[i + 1] > 0:
+            if i // 2 == 1:
+                x = dy_sampling_step_cfgpp(x, model, sigma_hat, **extra_args)        
+
+    return x
+
+@torch.no_grad()
+def sample_euler_negative_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1.):
+    """based on Euler Negative by KoishiStar"""
+    extra_args = {} if extra_args is None else extra_args
+    model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
+    s_in = x.new_ones([x.shape[0]])
+
+    for i in trange(len(sigmas) - 1, disable=disable):
+        gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
+        eps = torch.randn_like(x) * s_noise
+        sigma_hat = sigmas[i] * (gamma + 1)
+        if gamma > 0:
+            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
+        denoised = model(x, sigma_hat * s_in, **extra_args)
+        d = model.last_noise_uncond
+
+        if callback is not None:
+            callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigma_hat, 'denoised': denoised})
+
+        # Euler method
+        if sigmas[i + 1] > 0 and i // 2 == 1:
+            x = -denoised - d * sigmas[i+1]
+        else:
+            x = denoised + d * sigmas[i+1]
+    return x
 
 
 @torch.no_grad()
@@ -154,6 +198,7 @@ def sample_euler_smea_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None,
     """CFG++ version of Euler SMEA Dy by KoishiStar."""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
 
     for i in trange(len(sigmas) - 1, disable=disable):
@@ -184,6 +229,7 @@ def sample_euler_ancestral_cfgpp(model, x, sigmas, extra_args=None, callback=Non
     extra_args = {} if extra_args is None else extra_args
     noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
 
     for i in trange(len(sigmas) - 1, disable=disable):

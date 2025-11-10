@@ -3,11 +3,7 @@
 import torch
 from tqdm.auto import trange
 
-
-#   copied from kdiffusion/sampling.py and utils.py
-def default_noise_sampler(x):
-    return lambda sigma, sigma_next: torch.randn_like(x)
-
+from k_diffusion.sampling import default_noise_sampler
 
 @torch.no_grad()
 def sample_clyb_4m_sde_momentumized(model, x, sigmas, extra_args=None, callback=None, disable=None, eta=1.0, s_noise=1., noise_sampler=None, momentum=0.0):
@@ -34,7 +30,7 @@ def sample_clyb_4m_sde_momentumized(model, x, sigmas, extra_args=None, callback=
             momentum_vel = momentum * (timescale + offset) * velocity + (1 - momentum * (timescale + offset)) * diff
         return momentum_vel
 
-    sigma_min, sigma_max = sigmas[sigmas > 0].min(), sigmas.max()
+    sigma_max = sigmas.max()
 
     noise_sampler = default_noise_sampler(x) if noise_sampler is None else noise_sampler
 
