@@ -12,14 +12,21 @@ def sample_euler_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable
     """Implements Algorithm 2 (Euler steps) from Karras et al. (2022)."""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
+
+    if s_churn > 0.0:
+        seed = (int(x[0,0,0,0].item()) * 1234567890) % 65536
+        generator = torch.Generator(device='cpu').manual_seed(seed)
+    else:
+        generator = None
 
     for i in trange(len(sigmas) - 1, disable=disable):
         gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
-        eps = torch.randn_like(x) * s_noise
         sigma_hat = sigmas[i] * (gamma + 1)
         if gamma > 0:
-            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
+            eps = torch.randn(x.shape, generator=generator).to(x) * s_noise
+            x.add_(eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5)
         denoised = model(x, sigma_hat * s_in, **extra_args)
         d = model.last_noise_uncond
 
@@ -29,6 +36,7 @@ def sample_euler_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable
         # Euler method
         x = denoised + d * sigmas[i+1]
     return x
+
 
 class _Rescaler:
     def __init__(self, model, x, mode, **extra_args):
@@ -108,14 +116,21 @@ def sample_euler_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None, disa
     """CFG++ version of Euler Dy by KoishiStar."""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
+
+    if s_churn > 0.0:
+        seed = (int(x[0,0,0,0].item()) * 1234567890) % 65536
+        generator = torch.Generator(device='cpu').manual_seed(seed)
+    else:
+        generator = None
 
     for i in trange(len(sigmas) - 1, disable=disable):
         gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
-        eps = torch.randn_like(x) * s_noise
         sigma_hat = sigmas[i] * (gamma + 1)
         if gamma > 0:
-            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
+            eps = torch.randn(x.shape, generator=generator).to(x) * s_noise
+            x .add_(eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5)
         denoised = model(x, sigma_hat * s_in, **extra_args)
         d = model.last_noise_uncond
 
@@ -132,20 +147,26 @@ def sample_euler_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None, disa
     return x
 
 
-
 @torch.no_grad()
 def sample_euler_smea_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable=None, s_churn=0., s_tmin=0., s_tmax=float('inf'), s_noise=1.):
     """CFG++ version of Euler SMEA Dy by KoishiStar."""
     extra_args = {} if extra_args is None else extra_args
     model.need_last_noise_uncond = True
+    model.inner_model.inner_model.forge_objects.unet.model_options["disable_cfg1_optimization"] = True
     s_in = x.new_ones([x.shape[0]])
+
+    if s_churn > 0.0:
+        seed = (int(x[0,0,0,0].item()) * 1234567890) % 65536
+        generator = torch.Generator(device='cpu').manual_seed(seed)
+    else:
+        generator = None
 
     for i in trange(len(sigmas) - 1, disable=disable):
         gamma = min(s_churn / (len(sigmas) - 1), 2 ** 0.5 - 1) if s_tmin <= sigmas[i] <= s_tmax else 0.
-        eps = torch.randn_like(x) * s_noise
         sigma_hat = sigmas[i] * (gamma + 1)
         if gamma > 0:
-            x = x + eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5
+            eps = torch.randn(x.shape, generator=generator).to(x) * s_noise
+            x.add_(eps * (sigma_hat ** 2 - sigmas[i] ** 2) ** 0.5)
         denoised = model(x, sigma_hat * s_in, **extra_args)
         d = model.last_noise_uncond
 
@@ -161,6 +182,7 @@ def sample_euler_smea_dy_cfgpp(model, x, sigmas, extra_args=None, callback=None,
             if i + 1 // 2 == 0:     #   ??  this is i == 0
                 x = smea_sampling_step_cfgpp(x, model, sigma_hat, **extra_args)        
     return x
+
 
 @torch.no_grad()
 def sample_euler_ancestral_cfgpp(model, x, sigmas, extra_args=None, callback=None, disable=None, eta=1., s_noise=1., noise_sampler=None):
@@ -184,4 +206,3 @@ def sample_euler_ancestral_cfgpp(model, x, sigmas, extra_args=None, callback=Non
         if sigmas[i + 1] > 0:
             x = x + noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * sigma_up
     return x
-
