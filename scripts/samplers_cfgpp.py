@@ -1,26 +1,10 @@
 import torch
 from tqdm.auto import trange
 
-#   copied from kdiffusion/sampling.py and utils.py
-def default_noise_sampler(x):
-    return lambda sigma, sigma_next: torch.randn_like(x)
-def get_ancestral_step(sigma_from, sigma_to, eta=1.):
-    """Calculates the noise level (sigma_down) to step down to and the amount
-    of noise to add (sigma_up) when doing an ancestral sampling step."""
-    if not eta:
-        return sigma_to, 0.
-    sigma_up = min(sigma_to, eta * (sigma_to ** 2 * (sigma_from ** 2 - sigma_to ** 2) / sigma_from ** 2) ** 0.5)
-    sigma_down = (sigma_to ** 2 - sigma_up ** 2) ** 0.5
-    return sigma_down, sigma_up
-def append_dims(x, target_dims):
-    """Appends dimensions to the end of a tensor until it has target_dims dimensions."""
-    dims_to_append = target_dims - x.ndim
-    if dims_to_append < 0:
-        raise ValueError(f'input has {x.ndim} dims but target_dims is {target_dims}, which is less')
-    return x[(...,) + (None,) * dims_to_append]
-def to_d(x, sigma, denoised):
-    """Converts a denoiser output to a Karras ODE derivative."""
-    return (x - denoised) / append_dims(sigma, x.ndim)
+from k_diffusion.sampling import (
+    default_noise_sampler,
+    get_ancestral_step,
+)
 
 
 @torch.no_grad()
@@ -200,3 +184,4 @@ def sample_euler_ancestral_cfgpp(model, x, sigmas, extra_args=None, callback=Non
         if sigmas[i + 1] > 0:
             x = x + noise_sampler(sigmas[i], sigmas[i + 1]) * s_noise * sigma_up
     return x
+
